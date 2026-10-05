@@ -1,0 +1,15 @@
+digraph G {
+  rankdir=LR; fontname="Helvetica"; node [shape=box, style="rounded,filled", fillcolor="#eef2ff", color="#6366f1", fontname="Helvetica"]; edge [fontname="Helvetica", fontsize=10];
+  dev [label="Developer"]; gh [label="GitHub\nrepository"]; ci [label="GitHub Actions\n(test, build, smoke test)"];
+  reg [label="GHCR\nimage registry", fillcolor="#fef3c7", color="#d97706"];
+  dev -> gh [label="git push"]; gh -> ci [label="trigger"]; ci -> reg [label="push images\n(main)"];
+  subgraph cluster_run { label="Docker Compose deployment"; style=dashed; color="#64748b";
+    fe [label="Nginx + React\n:8080", fillcolor="#dcfce7", color="#16a34a"];
+    be [label="Express API\n:4000", fillcolor="#dcfce7", color="#16a34a"];
+    db [label="PostgreSQL", shape=cylinder, fillcolor="#dbeafe", color="#2563eb"];
+    pr [label="Prometheus\n:9090", fillcolor="#fee2e2", color="#dc2626"];
+    gr [label="Grafana\n:3001", fillcolor="#fee2e2", color="#dc2626"];
+    fe -> be [label="/api proxy"]; be -> db; pr -> be [label="scrape\n/api/metrics"]; gr -> pr [label="PromQL"];
+  }
+  user [label="Browser"]; user -> fe; reg -> fe [style=dotted, label="docker compose up"];
+}
