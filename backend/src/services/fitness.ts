@@ -1,0 +1,7 @@
+export type Goal='weight_loss'|'weight_gain'|'maintain'|'muscle_building';export type Gender='male'|'female'|'other';export type ActivityLevel='sedentary'|'light'|'moderate'|'very_active'|'athlete';export type Difficulty='beginner'|'intermediate'|'advanced';
+const activity:Record<ActivityLevel,number>={sedentary:1.2,light:1.375,moderate:1.55,very_active:1.725,athlete:1.9};
+const adjust:Record<Goal,number>={weight_loss:-500,weight_gain:400,maintain:0,muscle_building:250};const protein:Record<Goal,number>={weight_loss:1.8,weight_gain:1.4,maintain:1.6,muscle_building:2};
+export function calculateBmi(weight:number,height:number){return weight/((height/100)**2)}
+export function calculateBmr(s:{weightKg:number;heightCm:number;age:number;gender:Gender}){const x=10*s.weightKg+6.25*s.heightCm-5*s.age;return x+(s.gender==='male'?5:s.gender==='female'?-161:-78)}
+export function calculateFitnessPlan(s:{weightKg:number;heightCm:number;age:number;gender:Gender;activityLevel:ActivityLevel},goal:Goal){const bmi=calculateBmi(s.weightKg,s.heightCm),bmr=calculateBmr(s),tdee=bmr*activity[s.activityLevel],target=Math.max(1200,Math.round(tdee+adjust[goal])),p=Math.round(s.weightKg*protein[goal]),f=Math.round(target*.25/9),c=Math.max(0,Math.round((target-p*4-f*9)/4));return{goal,bmi:Number(bmi.toFixed(1)),bmr:Math.round(bmr),tdee:Math.round(tdee),targetCalories:target,proteinG:p,carbsG:c,fatG:f}}
+export function recommendDifficulty(a:ActivityLevel):Difficulty{return a==='sedentary'||a==='light'?'beginner':a==='moderate'?'intermediate':'advanced'}
