@@ -1,0 +1,1 @@
+import {Router} from 'express';import {prisma} from '../db';import {asyncHandler} from '../middleware/errors';const r=Router();r.get('/',asyncHandler(async(_req,res)=>{await prisma.$queryRaw`SELECT 1`;res.json({status:'ok',database:'ok'});}));export default r;
