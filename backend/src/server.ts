@@ -1,0 +1,1 @@
+import {app} from './app';import {config} from './config';import {prisma} from './db';const server=app.listen(config.port,()=>console.log(`FitTrack API running on :${config.port}`));process.on('SIGINT',async()=>{await prisma.$disconnect();server.close()});process.on('SIGTERM',async()=>{await prisma.$disconnect();server.close()});
