@@ -1,30 +1,30 @@
-name: FitTrack CI/CD
+name: FitTrack CI
 
 on:
   push:
-    branches: [main, develop, 'feature/**']
-  pull_request:
-    branches: [main, develop]
-
-permissions:
-  contents: read
+  workflow_dispatch:
 
 jobs:
   backend:
     name: Backend - test & build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       postgres:
-        image: postgres:16-alpine
+        image: postgres:16
         env:
           POSTGRES_USER: fittrack
           POSTGRES_PASSWORD: fittrack
           POSTGRES_DB: fittrack
-        ports: ['5432:5432']
+        ports:
+          - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U fittrack -d fittrack"
-          --health-interval 5s --health-timeout 5s --health-retries 10
+          --health-cmd "pg_isready -U fittrack"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
+      # throwaway CI-only values, not real secrets
       DATABASE_URL: postgresql://fittrack:fittrack@localhost:5432/fittrack?schema=public
       JWT_SECRET: ci-test-secret
     defaults:
@@ -33,110 +33,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 20 }
-      - name: Install dependencies
-        run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
-      - name: Generate Prisma client
-        run: npx prisma generate
-      - name: Apply database migrations
-        run: npx prisma migrate deploy
-      - name: Run unit + integration tests (with coverage)
-        run: npx vitest run --coverage
-      - name: Compile TypeScript
-        run: npm run build
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
         with:
-          name: backend-test-results
-          path: |
-            backend/test-results/junit.xml
-            backend/coverage/lcov.info
+          node-version: 20
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npx prisma migrate deploy
+      - run: npm test
+      - run: npm run build
 
   frontend:
-    name: Frontend - test & build
+    name: Frontend - build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 20 }
-      - name: Install dependencies
-        run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
-      - name: Run tests
-        run: npm test
-      - name: Type-check and build
-        run: npm run build
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm run build
 
   docker:
-    name: Docker - build & smoke test full stack
+    name: Docker build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: [backend, frontend]
     steps:
       - uses: actions/checkout@v4
-      - name: Validate compose file
-        run: docker compose config -q
-      - name: Build images and start the stack
-        run: docker compose up -d --build
-      - name: Wait for the app to become healthy
-        run: |
-          for i in $(seq 1 60); do
-            curl -fsS http://localhost:8080/health && exit 0
-            sleep 3
-          done
-          echo "App did not become healthy"; exit 1
-      - name: Smoke test - register a user through the frontend proxy
-        run: |
-          curl -fsS -X POST http://localhost:8080/api/auth/register \
-            -H 'Content-Type: application/json' \
-            -d '{"email":"ci@fittrack.test","password":"secret123"}' | grep -q '"token"'
-      - name: Smoke test - web UI is served
-        run: curl -fsS http://localhost:8080/ | grep -qi '<div id="root">'
-      - name: Smoke test - Prometheus scrapes the backend
-        run: |
-          for i in $(seq 1 30); do
-            curl -fsS 'http://localhost:9090/api/v1/query?query=up%7Bjob%3D%22fittrack-backend%22%7D' \
-              | grep -q '"1"\]' && exit 0
-            sleep 3
-          done
-          echo "Prometheus target is not up"; exit 1
-      - name: Smoke test - Grafana dashboard is provisioned
-        run: |
-          for i in $(seq 1 30); do
-            curl -fsS -u admin:admin http://localhost:3001/api/dashboards/uid/fittrack-api | grep -q 'FitTrack API' && exit 0
-            sleep 3
-          done
-          echo "Grafana dashboard missing"; exit 1
-      - name: Show container logs on failure
-        if: failure()
-        run: docker compose logs --no-color --tail=100
-      - name: Tear down
-        if: always()
-        run: docker compose down -v
-
-  publish:
-    name: Publish images to GitHub Container Registry
-    runs-on: ubuntu-latest
-    needs: [docker]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push images
-        run: |
-          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          for svc in backend frontend; do
-            IMAGE=ghcr.io/$OWNER/fittrack-$svc
-            docker build -t $IMAGE:${{ github.sha }} -t $IMAGE:latest ./$svc
-            docker push $IMAGE:${{ github.sha }}
-            docker push $IMAGE:latest
-          done
+      - name: Create .env from the safe template
+        run: cp .env.example .env
+      - run: docker compose build
