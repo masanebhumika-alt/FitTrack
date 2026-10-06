@@ -42,7 +42,7 @@ jobs:
       - run: npm run build
 
   frontend:
-    name: Frontend - build
+    name: Frontend - test & build
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -54,6 +54,7 @@ jobs:
         with:
           node-version: 20
       - run: npm ci
+      - run: npm test
       - run: npm run build
 
   docker:
