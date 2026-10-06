@@ -1,68 +1,42 @@
-# FitTrack - full stack: app + database + monitoring.
-# Run:  docker compose up --build -d
 services:
   db:
     image: postgres:16-alpine
-    restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-fittrack}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fittrack}
-      POSTGRES_DB: ${POSTGRES_DB:-fittrack}
+      POSTGRES_USER: fittrack
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: fittrack
     ports: ["5433:5432"]
     volumes: ["pgdata:/var/lib/postgresql/data"]
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fittrack} -d ${POSTGRES_DB:-fittrack}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
+    healthcheck: {test: ["CMD-SHELL","pg_isready -U fittrack -d fittrack"], interval: 5s, timeout: 5s, retries: 10}
   backend:
     build: ./backend
-    image: fittrack-backend:latest
-    restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-fittrack}:${POSTGRES_PASSWORD:-fittrack}@db:5432/${POSTGRES_DB:-fittrack}?schema=public
-      JWT_SECRET: ${JWT_SECRET:-local-demo-secret-change-me}
+      DATABASE_URL: postgresql://fittrack:${POSTGRES_PASSWORD}@db:5432/fittrack?schema=public
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
       PORT: 4000
       FRONTEND_URL: http://localhost:8080
     ports: ["4000:4000"]
-    depends_on:
-      db: { condition: service_healthy }
-
+    depends_on: {db: {condition: service_healthy}}
   frontend:
     build: ./frontend
-    image: fittrack-frontend:latest
-    restart: unless-stopped
     ports: ["8080:8080"]
-    depends_on:
-      backend: { condition: service_healthy }
-
+    depends_on: [backend]
   prometheus:
     image: prom/prometheus:v2.55.1
-    restart: unless-stopped
     ports: ["9090:9090"]
-    volumes:
-      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
-      - prometheus-data:/prometheus
-    depends_on:
-      backend: { condition: service_healthy }
-
+    volumes: ["./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro"]
+    depends_on: [backend]
   grafana:
     image: grafana/grafana:11.4.0
-    restart: unless-stopped
     ports: ["3001:3000"]
     environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
-      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/fittrack.json
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
     volumes:
       - grafana-data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on: [prometheus]
-
 volumes:
   pgdata:
   grafana-data:
-  prometheus-data:
