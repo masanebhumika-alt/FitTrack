@@ -1,0 +1,47 @@
+name: fittrack-ml
+# MLflow services for Assignment 2 (Q2). Kept separate so the main FitTrack stack is untouched.
+#   Start the tracking server:  docker compose -f docker-compose.ml.yml up -d --build mlflow
+#   Serve the trained model:    docker compose -f docker-compose.ml.yml --profile serve up -d model
+services:
+  mlflow:
+    build: ./ml
+    image: fittrack-ml:latest
+    command:
+      - mlflow
+      - server
+      - --host=0.0.0.0
+      - --port=5000
+      - --backend-store-uri=sqlite:////mlflow/mlflow.db
+      - --artifacts-destination=/mlflow/artifacts
+      - --serve-artifacts
+    ports: ["5000:5000"]
+    volumes: ["mlflow-data:/mlflow"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Only started after a model has been registered (see "profiles").
+  model:
+    build: ./ml
+    image: fittrack-ml:latest
+    profiles: ["serve"]
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+    command:
+      - mlflow
+      - models
+      - serve
+      - -m
+      - models:/fittrack-calorie-model@champion
+      - --host=0.0.0.0
+      - --port=5001
+      - --env-manager=local
+    ports: ["5001:5001"]
+    depends_on:
+      mlflow:
+        condition: service_healthy
+
+volumes:
+  mlflow-data:
